@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>The 7th Continent: All-Seeing Eye</title>
+
+<!-- PWA & Mobile Web App Meta Tags -->
+<meta name="theme-color" content="#1b1e22">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="All-Seeing Eye">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<style>
+  :root {
+    --bg-dark: #1b1e22;
+    --accent-gold: #e2b763;
+    --text-light: #eee;
+  }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    height: 100dvh;
+    overflow: hidden;
+    background-color: #000;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  #container {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    z-index: 0;
+    background: #000;
+  }
+  
+  /* Start screen. Centered 947x2048 aspect ratio overlay */
+  #overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    width: min(100vw, calc(100vh * 947 / 2048));
+    width: min(100vw, calc(100dvh * 947 / 2048));
+    aspect-ratio: 947 / 2048;
+    background: url('assets/background.png') center / 100% 100% no-repeat;
+    box-shadow: 0 0 0 100vmax var(--bg-dark);
+    container-type: inline-size;
+    color: var(--text-light);
+    text-align: center;
+    box-sizing: border-box;
+  }
+  #overlay.hidden { display: none; }
+
+  /* Shared placement inside overlay */
+  #logo, #title, #intro, #start-container, #cache-status, #error {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+  }
+  #logo { top: 2%; width: 70%; height: auto; filter: drop-shadow(0 1cqw 2cqw rgba(0,0,0,.6)); }
+  #title { top: 43%; width: 80%; height: auto; filter: drop-shadow(0 1cqw 2cqw rgba(0,0,0,.6)); }
+  
+  #intro {
+    top: 67%;
+    width: 82%;
+    font-size: 4cqw;
+    line-height: 1.45;
+    text-shadow: 0 .3cqw .8cqw rgba(0,0,0,.8);
+    text-align: center;
+    color: #dedede;
+  }
+
+  #start-container {
+    bottom: 4%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1cqw;
+  }
+
+  #start {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    line-height: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #start img {
+    display: block;
+    width: 60cqw;
+    height: auto;
+    transition: transform .08s ease-out, filter .08s ease-out;
+  }
+  #start:active { transform: scale(.96); }
+  #start:active img { filter: brightness(1.15); }
+
+  #cache-status {
+    top: 62%;
+    width: 80%;
+    font-size: 3.2cqw;
+    color: var(--accent-gold);
+    text-shadow: 0 .2cqw .5cqw rgba(0,0,0,0.9);
+    letter-spacing: 0.5px;
+  }
+
+  #error {
+    bottom: 1.5%;
+    width: 84%;
+    font-size: 3.4cqw;
+    color: #f88;
+    text-shadow: 0 .3cqw .8cqw rgba(0,0,0,.8);
+  }
+
+  /* Control bar (Top Right) */
+  #control-bar {
+    position: absolute;
+    top: max(12px, env(safe-area-inset-top));
+    right: max(12px, env(safe-area-inset-right));
+    z-index: 20;
+    display: flex;
+    gap: 8px;
+  }
+  .ctrl-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(27, 30, 34, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: background 0.2s, transform 0.1s;
+  }
+  .ctrl-btn:active { transform: scale(0.92); background: rgba(226, 183, 99, 0.4); }
+
+  /* iOS A2HS Installation Banner */
+  #ios-install-banner {
+    display: none;
+    position: absolute;
+    bottom: max(16px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 400px;
+    z-index: 25;
+    background: rgba(27, 30, 34, 0.95);
+    border: 1px solid var(--accent-gold);
+    border-radius: 12px;
+    padding: 12px 16px;
+    color: #fff;
+    font-size: 13px;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    backdrop-filter: blur(10px);
+  }
+  #ios-install-banner strong { color: var(--accent-gold); }
+  #ios-install-banner .close-btn {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  /* Camera Permission Modal */
+  #camera-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(6px);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #camera-modal.active { display: flex; }
+  .modal-content {
+    background: var(--bg-dark);
+    border: 1px solid var(--accent-gold);
+    border-radius: 16px;
+    padding: 24px;
+    max-width: 360px;
+    text-align: center;
+    color: #fff;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+  }
+  .modal-content h3 { margin-top: 0; color: var(--accent-gold); }
+  .modal-content p { font-size: 14px; line-height: 1.5; color: #ccc; }
+  .modal-content button {
+    margin-top: 16px;
+    padding: 10px 24px;
+    background: var(--accent-gold);
+    color: #111;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+
+  #hud {
+    position: absolute;
+    left: .5rem;
+    bottom: max(.5rem, env(safe-area-inset-bottom));
+    z-index: 15;
+    font-family: monospace;
+    font-size: 11px;
+    color: #0f0;
+    background: rgba(0,0,0,.7);
+    padding: 4px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    white-space: pre;
+    visibility: hidden;
+  }
+</style>
+</head>
+<body>
+
+<div id="container"></div>
+
+<!-- Top Control Bar -->
+<div id="control-bar">
+  <button id="btn-sound" class="ctrl-btn" title="Toggle Sound" aria-label="Toggle Sound">🔊</button>
+  <button id="btn-fullscreen" class="ctrl-btn" title="Toggle Fullscreen" aria-label="Toggle Fullscreen">⛶</button>
+  <button id="btn-hud" class="ctrl-btn" title="Toggle Debug Info" aria-label="Toggle Debug Info">🐞</button>
+</div>
+
+<!-- Main UI Overlay -->
+<div id="overlay">
+  <img id="logo" src="assets/t7clogo.png" alt="The 7th Continent" width="851" height="643">
+  <img id="title" src="assets/allseeingeye.png" alt="The All-Seeing Eye" width="860" height="507">
+  
+  <div id="cache-status">Checking offline availability...</div>
+
+  <p id="intro">
+    Use your camera to scan the <strong>Terrain cards</strong> in play, until the <strong>All-Seeing Eye</strong> reveals hidden secrets!
+  </p>
+
+  <div id="start-container">
+    <button id="start" aria-label="Start Camera & Scan">
+      <img src="assets/startbutton.png" alt="Start" width="500" height="278">
+    </button>
+  </div>
+  
+  <p id="error"></p>
+</div>
+
+<!-- iOS PWA Installation Guidance Banner -->
+<div id="ios-install-banner">
+  <button class="close-btn" id="close-ios-banner">✕</button>
+  📱 Install for Offline Play:<br>
+  Tap <strong>Share</strong> ➔ <strong>Add to Home Screen</strong>
+</div>
+
+<!-- Camera Permission Modal -->
+<div id="camera-modal">
+  <div class="modal-content">
+    <h3>Camera Access Required</h3>
+    <p id="camera-error-msg">Please allow camera access to scan Terrain cards with the All-Seeing Eye.</p>
+    <p style="font-size: 12px; color: #aaa;">If denied, please check your browser/iOS Settings &gt; Safari &gt; Camera.</p>
+    <button id="modal-close-btn">Dismiss</button>
+  </div>
+</div>
+
+<div id="hud"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.js",
+    "three/addons/renderers/CSS3DRenderer.js": "./vendor/three-addons/CSS3DRenderer.js"
+  }
+}
+</script>
+<script type="module" src="./main.js"></script>
+</body>
+</html>
