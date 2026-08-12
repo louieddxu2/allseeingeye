@@ -1,4 +1,4 @@
-const CACHE_NAME = 'all-seeing-eye-v3';
+const CACHE_NAME = 'all-seeing-eye-v4';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -127,6 +127,11 @@ async function handleRangeRequest(request) {
       console.error('[SW] Range request fetch failed:', err);
       return new Response('', { status: 404, statusText: 'Not Found' });
     }
+  }
+
+  // If response is already a partial 206 response, return directly
+  if (response.status === 206) {
+    return response;
   }
 
   const rangeHeader = request.headers.get('range');

@@ -68,7 +68,7 @@ function setMuteState(muted) {
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v3');
+    const cache = await caches.open('all-seeing-eye-v4');
     for (const file of CRITICAL_OFFLINE_FILES) {
       const match = await cache.match(file, { ignoreSearch: true });
       if (!match || !match.ok) {
@@ -106,7 +106,6 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
     .then((reg) => {
       console.log('[App] SW registered with scope:', reg.scope);
-      // Force check for SW updates on every page load
       reg.update().catch(() => {});
       updateCacheStatusUI();
     })
@@ -270,9 +269,9 @@ let videoEnded = false;
 let cooldownStart = 0;
 
 for (const [id, v] of Object.entries(videos)) {
-  v.addEventListener('ended', () => { 
+  v.addEventListener('ended', () => {
     if (active && active.meta.video === id) {
-      videoEnded = true; 
+      videoEnded = true;
     }
   });
 }
@@ -292,17 +291,33 @@ function startPlayback(entry) {
     videoPlane.parent.remove(videoPlane);
   }
   entry.anchor.group.add(videoPlane);
+
   video.currentTime = 0;
   video.muted = isMuted;
 
-  const playPromise = video.play();
-  if (playPromise !== undefined) {
-    playPromise.catch(() => {
-      // Autoplay with sound blocked -> fallback to muted playback & sync UI state!
-      setMuteState(true);
-      video.play().catch((err) => console.error('Video playback failed:', err));
-    });
+  const playVideo = () => {
+    const playPromise = video.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((err) => {
+        console.warn('Video play rejected, trying muted fallback:', err);
+        setMuteState(true);
+        video.play().catch((e) => console.error('Muted video play failed:', e));
+      });
+    }
+  };
+
+  if (video.readyState >= 2) {
+    playVideo();
+  } else {
+    video.load();
+    const onCanPlay = () => {
+      video.removeEventListener('canplay', onCanPlay);
+      playVideo();
+    };
+    video.addEventListener('canplay', onCanPlay);
+    playVideo();
   }
+
   mode = 'PLAYING';
 }
 
@@ -475,14 +490,21 @@ async function start() {
   const errorEl = document.getElementById('error');
   if (errorEl) errorEl.textContent = '';
 
-  // Pre-warm and unlock all 4 video elements for iOS Safari
+  // Safe pre-warm and unlock all 4 video elements for Mobile Safari & Chrome
   for (const [id, v] of Object.entries(videos)) {
     warmVideo(id);
+    v.muted = true;
+    try {
+      const p = v.play();
+      if (p !== undefined) {
+        await p.catch(() => {});
+      }
+      v.pause();
+      v.currentTime = 0;
+    } catch (e) {
+      console.warn('Video unlock notice:', id, e);
+    }
     v.muted = isMuted;
-    const p = v.play();
-    v.pause();
-    v.currentTime = 0;
-    if (p) p.catch(() => {});
   }
 
   try {
@@ -495,8 +517,6 @@ async function start() {
   }
 
   document.getElementById('overlay')?.classList.add('hidden');
-
-  // Show AR-mode UI controls
   document.getElementById('control-bar')?.classList.add('active');
 
   renderer.setAnimationLoop(() => {
