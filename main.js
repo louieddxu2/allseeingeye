@@ -5,7 +5,7 @@ import { MindARThree } from './vendor/mindar-image-three.prod.js';
 // Parameters & Configurations
 // ---------------------------------------------------------------------------
 const CONFIG = {
-  TRIGGER_MIN_FRACTION: 0.4,
+  TRIGGER_MIN_FRACTION: 0.2,
   TRIGGER_SOLID_MS: 1000,
   LOST_GRACE_MS: 1000,
   ALL_CLEAR_MS: 500,
@@ -265,10 +265,14 @@ function meetsSizeCriterion(group) {
 let mode = 'IDLE';
 let active = null;
 let videoEnded = false;
-let clearSince = null;
+let cooldownStart = 0;
 
-for (const v of Object.values(videos)) {
-  v.addEventListener('ended', () => { videoEnded = true; });
+for (const [id, v] of Object.entries(videos)) {
+  v.addEventListener('ended', () => { 
+    if (active && active.meta.video === id) {
+      videoEnded = true; 
+    }
+  });
 }
 
 function startPlayback(entry) {
@@ -282,6 +286,9 @@ function startPlayback(entry) {
   maskMaterial.uniforms.map.value = tex;
   maskMaterial.needsUpdate = true;
 
+  if (videoPlane.parent) {
+    videoPlane.parent.remove(videoPlane);
+  }
   entry.anchor.group.add(videoPlane);
   video.currentTime = 0;
   video.muted = isMuted;
@@ -302,11 +309,13 @@ function stopPlayback() {
     const video = videos[active.meta.video];
     video.pause();
     video.currentTime = 0;
-    active.anchor.group.remove(videoPlane);
+    if (videoPlane.parent === active.anchor.group) {
+      active.anchor.group.remove(videoPlane);
+    }
     active = null;
   }
-  clearSince = null;
   mode = 'COOLDOWN';
+  cooldownStart = performance.now();
 }
 
 function update(now) {
@@ -336,11 +345,13 @@ function update(now) {
     }
 
   } else if (mode === 'COOLDOWN') {
-    if (anyVisible) {
-      clearSince = null;
-    } else {
-      if (clearSince === null) clearSince = now;
-      if (now - clearSince >= CONFIG.ALL_CLEAR_MS) mode = 'IDLE';
+    if (now - cooldownStart >= CONFIG.ALL_CLEAR_MS) {
+      mode = 'IDLE';
+      for (const entry of anchors) {
+        if (entry.state.visible) {
+          entry.state.foundAt = now;
+        }
+      }
     }
   }
 }
@@ -398,6 +409,12 @@ if (stopBtn) {
 async function stopCamera() {
   stopPlayback();
   mode = 'IDLE';
+
+  for (const e of anchors) {
+    e.state.visible = false;
+    e.state.foundAt = 0;
+    e.state.lostAt = 0;
+  }
 
   try {
     renderer.setAnimationLoop(null);
