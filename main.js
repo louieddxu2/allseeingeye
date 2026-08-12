@@ -68,7 +68,7 @@ function setMuteState(muted) {
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v4');
+    const cache = await caches.open('all-seeing-eye-v5');
     for (const file of CRITICAL_OFFLINE_FILES) {
       const match = await cache.match(file, { ignoreSearch: true });
       if (!match || !match.ok) {
@@ -299,7 +299,7 @@ function startPlayback(entry) {
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        console.warn('Video play rejected, trying muted fallback:', err);
+        // If unmuted autoplay blocked by WebKit, fallback to muted autoplay (guaranteed by spec) & sync UI state
         setMuteState(true);
         video.play().catch((e) => console.error('Muted video play failed:', e));
       });
@@ -393,6 +393,11 @@ const soundBtn = document.getElementById('btn-sound');
 if (soundBtn) {
   soundBtn.addEventListener('click', () => {
     setMuteState(!isMuted);
+    // Directly play current active video if sound is unmuted by user gesture
+    if (active) {
+      const v = videos[active.meta.video];
+      if (v) v.play().catch(() => {});
+    }
   });
 }
 
@@ -490,21 +495,9 @@ async function start() {
   const errorEl = document.getElementById('error');
   if (errorEl) errorEl.textContent = '';
 
-  // Safe pre-warm and unlock all 4 video elements for Mobile Safari & Chrome
-  for (const [id, v] of Object.entries(videos)) {
+  // Clean video pre-warm without fragile sequential await loop
+  for (const [id, v] of Object.entries(VIDEO_FILES)) {
     warmVideo(id);
-    v.muted = true;
-    try {
-      const p = v.play();
-      if (p !== undefined) {
-        await p.catch(() => {});
-      }
-      v.pause();
-      v.currentTime = 0;
-    } catch (e) {
-      console.warn('Video unlock notice:', id, e);
-    }
-    v.muted = isMuted;
   }
 
   try {
