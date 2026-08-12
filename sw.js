@@ -30,21 +30,36 @@ self.addEventListener('install', (event) => {
       console.log('[SW] Pre-caching offline assets...');
       let total = ASSETS_TO_CACHE.length;
       let cachedCount = 0;
+      let hasFailed = false;
+
       for (const url of ASSETS_TO_CACHE) {
         try {
           await cache.add(url);
           cachedCount++;
-          // Broadcast caching progress to all clients (including uncontrolled)
+          const progressPct = Math.round((cachedCount / total) * 100);
+          
+          // Broadcast caching progress to all window clients
           const clientsList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
           clientsList.forEach((client) => {
             client.postMessage({
               type: 'CACHE_PROGRESS',
-              progress: Math.round((cachedCount / total) * 100)
+              progress: progressPct,
+              cachedCount,
+              total
             });
           });
         } catch (err) {
           console.warn('[SW] Failed to cache:', url, err);
+          hasFailed = true;
         }
+      }
+
+      if (!hasFailed) {
+        console.log('[SW] All essential assets successfully cached for offline use.');
+        const clientsList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+        clientsList.forEach((client) => {
+          client.postMessage({ type: 'CACHE_COMPLETE' });
+        });
       }
     }).then(() => self.skipWaiting())
   );

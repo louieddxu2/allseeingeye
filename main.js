@@ -35,63 +35,109 @@ const VIDEO_FILES = {
   anim04: 'assets/anim04.mp4',
 };
 
+// Critical assets required for true offline gameplay
+const CRITICAL_OFFLINE_FILES = [
+  'assets/targets.mind',
+  'assets/anim01.mp4',
+  'assets/anim02.mp4',
+  'assets/anim03.mp4',
+  'assets/anim04.mp4',
+  'vendor/three.module.js',
+  'vendor/mindar-image-three.prod.js'
+];
+
 // Global Mute State
 let isMuted = CONFIG.START_MUTED;
 
+// Sync Mute State with UI Button & Audio Elements
+function setMuteState(muted) {
+  isMuted = muted;
+  const soundBtn = document.getElementById('btn-sound');
+  if (soundBtn) {
+    soundBtn.textContent = isMuted ? '🔇' : '🔊';
+    soundBtn.title = isMuted ? 'Unmute Sound' : 'Mute Sound';
+  }
+  for (const v of Object.values(videos)) {
+    v.muted = isMuted;
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Service Worker & Offline Cache Status
+// Strict Offline Cache Verification (No Fake Positives)
 // ---------------------------------------------------------------------------
+async function verifyOfflineAssetsCached() {
+  if (!('caches' in window)) return false;
+  try {
+    const cache = await caches.open('all-seeing-eye-v1');
+    for (const file of CRITICAL_OFFLINE_FILES) {
+      const match = await cache.match(file, { ignoreSearch: true });
+      if (!match || !match.ok) {
+        return false;
+      }
+    }
+    return true;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function updateCacheStatusUI(forcedMessage = null, isReady = false) {
+  const el = document.getElementById('cache-status');
+  if (!el) return;
+
+  if (forcedMessage) {
+    el.textContent = forcedMessage;
+    el.style.color = isReady ? '#7ef07e' : '#e2b763';
+    return;
+  }
+
+  const fullyCached = await verifyOfflineAssetsCached();
+  if (fullyCached) {
+    el.textContent = 'Offline Mode Ready ✔';
+    el.style.color = '#7ef07e';
+  } else {
+    el.textContent = 'Downloading offline assets...';
+    el.style.color = '#e2b763';
+  }
+}
+
+// Register SW & Listen for Caching Events
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js', { scope: './' })
     .then((reg) => {
       console.log('[App] SW registered with scope:', reg.scope);
-      navigator.serviceWorker.ready.then(() => {
-        const el = document.getElementById('cache-status');
-        if (el) {
-          el.textContent = 'Offline Mode Ready ✔';
-          el.style.color = '#7ef07e';
-        }
-      });
+      updateCacheStatusUI();
     })
     .catch((err) => {
       console.warn('[App] SW registration failed:', err);
-      const el = document.getElementById('cache-status');
-      if (el) el.textContent = 'Ready';
+      updateCacheStatusUI('Online Mode (SW Disabled)', false);
     });
 
-  navigator.serviceWorker.addEventListener('message', (event) => {
-    if (event.data && event.data.type === 'CACHE_PROGRESS') {
+  navigator.serviceWorker.addEventListener('message', async (event) => {
+    if (!event.data) return;
+    if (event.data.type === 'CACHE_PROGRESS') {
       const el = document.getElementById('cache-status');
       if (el) {
-        el.textContent = `Offline Assets: ${event.data.progress}% Ready`;
-        if (event.data.progress >= 100) {
-          el.textContent = 'Offline Mode Ready ✔';
-          el.style.color = '#7ef07e';
-        }
+        el.textContent = `Downloading offline assets: ${event.data.progress}%`;
+        el.style.color = '#e2b763';
       }
+      if (event.data.progress >= 100) {
+        updateCacheStatusUI();
+      }
+    } else if (event.data.type === 'CACHE_COMPLETE') {
+      updateCacheStatusUI();
     }
   });
 
-  if (navigator.serviceWorker.controller) {
-    const el = document.getElementById('cache-status');
-    if (el) {
-      el.textContent = 'Offline Mode Ready ✔';
-      el.style.color = '#7ef07e';
-    }
-  }
+  navigator.serviceWorker.ready.then(() => {
+    updateCacheStatusUI();
+  });
 } else {
-  const el = document.getElementById('cache-status');
-  if (el) el.textContent = 'Ready';
+  updateCacheStatusUI('Online Mode (No SW)', false);
 }
 
-// Fallback timeout to ensure status updates even on first load
-setTimeout(() => {
-  const el = document.getElementById('cache-status');
-  if (el && (el.textContent === 'Initializing...' || el.textContent === 'Checking offline availability...')) {
-    el.textContent = 'Offline Mode Ready ✔';
-    el.style.color = '#7ef07e';
-  }
-}, 2500);
+// Check initial cache status on page load
+updateCacheStatusUI();
 
 // ---------------------------------------------------------------------------
 // Video elements + Masked-video material (2:1 RGB + Alpha mask)
@@ -229,8 +275,10 @@ function startPlayback(entry) {
   entry.anchor.group.add(videoPlane);
   video.currentTime = 0;
   video.muted = isMuted;
+
   video.play().catch(() => {
-    video.muted = true;
+    // Autoplay with sound blocked -> fallback to muted playback & sync UI state!
+    setMuteState(true);
     video.play().catch((err) => console.error('Video playback failed:', err));
   });
   mode = 'PLAYING';
@@ -298,12 +346,7 @@ function updateHud() {
 const soundBtn = document.getElementById('btn-sound');
 if (soundBtn) {
   soundBtn.addEventListener('click', () => {
-    isMuted = !isMuted;
-    soundBtn.textContent = isMuted ? '🔇' : '🔊';
-    soundBtn.title = isMuted ? 'Unmute Sound' : 'Mute Sound';
-    for (const v of Object.values(videos)) {
-      v.muted = isMuted;
-    }
+    setMuteState(!isMuted);
   });
 }
 
