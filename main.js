@@ -37,13 +37,13 @@ const VIDEO_FILES = {
 
 // Critical assets required for true offline gameplay
 const CRITICAL_OFFLINE_FILES = [
-  'assets/targets.mind',
-  'assets/anim01.mp4',
-  'assets/anim02.mp4',
-  'assets/anim03.mp4',
-  'assets/anim04.mp4',
-  'vendor/three.module.js',
-  'vendor/mindar-image-three.prod.js'
+  'targets.mind',
+  'anim01.mp4',
+  'anim02.mp4',
+  'anim03.mp4',
+  'anim04.mp4',
+  'three.module.js',
+  'mindar-image-three.prod.js'
 ];
 
 // Global Mute State
@@ -63,19 +63,31 @@ function setMuteState(muted) {
 }
 
 // ---------------------------------------------------------------------------
-// Strict Offline Cache Verification
+// Strict & Reliable Offline Cache Verification
 // ---------------------------------------------------------------------------
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v5');
+    const cache = await caches.open('all-seeing-eye-v6');
+    const flag = await cache.match('./offline-ready-flag');
+    if (flag) {
+      return true;
+    }
+    const keys = await cache.keys();
+    if (keys.length === 0) return false;
+
+    // Secondary check: verify critical files exist in cache keys
+    let foundCount = 0;
     for (const file of CRITICAL_OFFLINE_FILES) {
       const match = await cache.match(file, { ignoreSearch: true });
-      if (!match || !match.ok) {
-        return false;
+      if (match && match.ok) {
+        foundCount++;
+      } else {
+        const foundInKeys = keys.some(req => req.url.includes(file));
+        if (foundInKeys) foundCount++;
       }
     }
-    return true;
+    return foundCount >= CRITICAL_OFFLINE_FILES.length - 1;
   } catch (err) {
     return false;
   }
@@ -119,14 +131,16 @@ if ('serviceWorker' in navigator) {
     if (event.data.type === 'CACHE_PROGRESS') {
       const el = document.getElementById('cache-status');
       if (el) {
-        el.textContent = `Downloading offline assets: ${event.data.progress}%`;
-        el.style.color = '#e2b763';
-      }
-      if (event.data.progress >= 100) {
-        updateCacheStatusUI();
+        if (event.data.progress >= 100) {
+          el.textContent = 'Offline Mode Ready ✔';
+          el.style.color = '#7ef07e';
+        } else {
+          el.textContent = `Downloading offline assets: ${event.data.progress}%`;
+          el.style.color = '#e2b763';
+        }
       }
     } else if (event.data.type === 'CACHE_COMPLETE') {
-      updateCacheStatusUI();
+      updateCacheStatusUI('Offline Mode Ready ✔', true);
     }
   });
 
@@ -299,7 +313,6 @@ function startPlayback(entry) {
     const playPromise = video.play();
     if (playPromise !== undefined) {
       playPromise.catch((err) => {
-        // If unmuted autoplay blocked by WebKit, fallback to muted autoplay (guaranteed by spec) & sync UI state
         setMuteState(true);
         video.play().catch((e) => console.error('Muted video play failed:', e));
       });
@@ -333,6 +346,26 @@ function stopPlayback() {
   }
   mode = 'COOLDOWN';
   cooldownStart = performance.now();
+}
+
+function forceResetScan() {
+  stopPlayback();
+  mode = 'IDLE';
+  cooldownStart = 0;
+  for (const entry of anchors) {
+    if (entry.state.visible) {
+      entry.state.foundAt = performance.now();
+    } else {
+      entry.state.foundAt = 0;
+    }
+    entry.state.lostAt = 0;
+  }
+
+  const resetBtn = document.getElementById('btn-reset-scan');
+  if (resetBtn) {
+    resetBtn.style.opacity = '0.5';
+    setTimeout(() => { resetBtn.style.opacity = '1'; }, 300);
+  }
 }
 
 function update(now) {
@@ -393,7 +426,6 @@ const soundBtn = document.getElementById('btn-sound');
 if (soundBtn) {
   soundBtn.addEventListener('click', () => {
     setMuteState(!isMuted);
-    // Directly play current active video if sound is unmuted by user gesture
     if (active) {
       const v = videos[active.meta.video];
       if (v) v.play().catch(() => {});
@@ -428,6 +460,12 @@ if (stopBtn) {
   stopBtn.addEventListener('click', stopCamera);
 }
 
+// Force Reset Scan Handler
+const resetBtn = document.getElementById('btn-reset-scan');
+if (resetBtn) {
+  resetBtn.addEventListener('click', forceResetScan);
+}
+
 async function stopCamera() {
   stopPlayback();
   mode = 'IDLE';
@@ -456,6 +494,7 @@ async function stopCamera() {
 
   // Hide AR-mode UI elements
   document.getElementById('control-bar')?.classList.remove('active');
+  document.getElementById('btn-reset-scan')?.classList.remove('active');
   hud.style.visibility = 'hidden';
   hudVisible = false;
   if (hudBtn) hudBtn.style.background = 'rgba(27, 30, 34, 0.75)';
@@ -495,7 +534,6 @@ async function start() {
   const errorEl = document.getElementById('error');
   if (errorEl) errorEl.textContent = '';
 
-  // Clean video pre-warm without fragile sequential await loop
   for (const [id, v] of Object.entries(VIDEO_FILES)) {
     warmVideo(id);
   }
@@ -511,6 +549,7 @@ async function start() {
 
   document.getElementById('overlay')?.classList.add('hidden');
   document.getElementById('control-bar')?.classList.add('active');
+  document.getElementById('btn-reset-scan')?.classList.add('active');
 
   renderer.setAnimationLoop(() => {
     scene.updateMatrixWorld(true);

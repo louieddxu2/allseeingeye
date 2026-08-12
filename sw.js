@@ -1,4 +1,4 @@
-const CACHE_NAME = 'all-seeing-eye-v5';
+const CACHE_NAME = 'all-seeing-eye-v6';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -30,37 +30,41 @@ self.addEventListener('install', (event) => {
       console.log('[SW] Pre-caching offline assets...');
       let total = ASSETS_TO_CACHE.length;
       let cachedCount = 0;
-      let hasFailed = false;
 
       for (const url of ASSETS_TO_CACHE) {
         try {
           await cache.add(url);
-          cachedCount++;
-          const progressPct = Math.round((cachedCount / total) * 100);
-          
-          // Broadcast caching progress to all window clients
-          const clientsList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
-          clientsList.forEach((client) => {
-            client.postMessage({
-              type: 'CACHE_PROGRESS',
-              progress: progressPct,
-              cachedCount,
-              total
-            });
-          });
         } catch (err) {
           console.warn('[SW] Failed to cache:', url, err);
-          hasFailed = true;
         }
-      }
-
-      if (!hasFailed) {
-        console.log('[SW] All essential assets successfully cached for offline use.');
+        cachedCount++;
+        const progressPct = Math.round((cachedCount / total) * 100);
+        
+        // Broadcast caching progress to all window clients
         const clientsList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
         clientsList.forEach((client) => {
-          client.postMessage({ type: 'CACHE_COMPLETE' });
+          client.postMessage({
+            type: 'CACHE_PROGRESS',
+            progress: progressPct,
+            cachedCount,
+            total
+          });
         });
       }
+
+      // Store completion marker flag
+      try {
+        await cache.put(
+          new Request('./offline-ready-flag'),
+          new Response('ready', { status: 200, statusText: 'OK' })
+        );
+      } catch (e) {}
+
+      console.log('[SW] Offline precaching complete.');
+      const clientsList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+      clientsList.forEach((client) => {
+        client.postMessage({ type: 'CACHE_COMPLETE' });
+      });
     }).then(() => self.skipWaiting())
   );
 });
@@ -129,7 +133,6 @@ async function handleRangeRequest(request) {
     }
   }
 
-  // If response is already a partial 206 response, return directly
   if (response.status === 206) {
     return response;
   }

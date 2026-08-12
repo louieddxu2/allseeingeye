@@ -132,9 +132,8 @@
     display: none;
     gap: 8px;
   }
-  #control-bar.active {
-    display: flex;
-  }
+  #control-bar.active { display: flex; }
+
   .ctrl-btn {
     width: 40px;
     height: 40px;
@@ -152,6 +151,31 @@
     transition: background 0.2s, transform 0.1s;
   }
   .ctrl-btn:active { transform: scale(0.92); background: rgba(226, 183, 99, 0.4); }
+
+  /* Bottom Reset Scan Button */
+  #btn-reset-scan {
+    display: none;
+    position: absolute;
+    bottom: max(24px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    padding: 10px 22px;
+    border-radius: 24px;
+    background: rgba(27, 30, 34, 0.85);
+    border: 1px solid var(--accent-gold);
+    color: var(--accent-gold);
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    transition: background 0.2s, transform 0.1s, opacity 0.2s;
+  }
+  #btn-reset-scan.active { display: flex; align-items: center; gap: 6px; }
+  #btn-reset-scan:active { transform: translateX(-50%) scale(0.94); background: rgba(226, 183, 99, 0.4); }
 
   /* iOS A2HS Installation Banner */
   #ios-install-banner {
@@ -251,12 +275,15 @@
   <button id="btn-hud" class="ctrl-btn" title="Toggle Debug Info" aria-label="Toggle Debug Info">🐞</button>
 </div>
 
+<!-- Bottom Reset Scan Button -->
+<button id="btn-reset-scan" title="Force Reset State & Rescan" aria-label="Reset Scan">🔄 Reset Scan</button>
+
 <!-- Main UI Overlay -->
 <div id="overlay">
   <img id="logo" src="assets/t7clogo.png" alt="The 7th Continent" width="851" height="643">
   <img id="title" src="assets/allseeingeye.png" alt="The All-Seeing Eye" width="860" height="507">
   
-  <div id="cache-status">Initializing...</div>
+  <div id="cache-status">Checking offline availability...</div>
 
   <p id="intro">
     Use your camera to scan the <strong>Terrain cards</strong> in play, until the <strong>All-Seeing Eye</strong> reveals hidden secrets!
