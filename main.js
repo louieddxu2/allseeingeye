@@ -63,7 +63,7 @@ function setMuteState(muted) {
 }
 
 // ---------------------------------------------------------------------------
-// Strict Offline Cache Verification (No Fake Positives)
+// Strict Offline Cache Verification
 // ---------------------------------------------------------------------------
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
@@ -147,7 +147,7 @@ const videoTextures = {};
 for (const [id, url] of Object.entries(VIDEO_FILES)) {
   const v = document.createElement('video');
   v.src = url;
-  v.preload = 'none';
+  v.preload = 'auto';
   v.playsInline = true;
   v.setAttribute('playsinline', '');
   v.setAttribute('webkit-playsinline', '');
@@ -157,11 +157,13 @@ for (const [id, url] of Object.entries(VIDEO_FILES)) {
 
 const warmed = new Set();
 function warmVideo(videoId) {
-  if (warmed.has(videoId)) return;
-  warmed.add(videoId);
   const v = videos[videoId];
-  v.preload = 'auto';
-  v.load();
+  if (!v) return;
+  if (!warmed.has(videoId)) {
+    warmed.add(videoId);
+    v.preload = 'auto';
+    v.load();
+  }
 }
 
 const maskMaterial = new THREE.ShaderMaterial({
@@ -192,6 +194,9 @@ const videoPlane = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), maskMaterial);
 function textureFor(videoId) {
   if (!videoTextures[videoId]) {
     videoTextures[videoId] = new THREE.VideoTexture(videos[videoId]);
+    videoTextures[videoId].minFilter = THREE.LinearFilter;
+    videoTextures[videoId].magFilter = THREE.LinearFilter;
+    videoTextures[videoId].generateMipmaps = false;
   }
   return videoTextures[videoId];
 }
@@ -270,17 +275,25 @@ function startPlayback(entry) {
   active = entry;
   videoEnded = false;
   warmVideo(entry.meta.video);
+
   const video = videos[entry.meta.video];
-  maskMaterial.uniforms.map.value = textureFor(entry.meta.video);
+  const tex = textureFor(entry.meta.video);
+  tex.needsUpdate = true;
+  maskMaterial.uniforms.map.value = tex;
+  maskMaterial.needsUpdate = true;
+
   entry.anchor.group.add(videoPlane);
   video.currentTime = 0;
   video.muted = isMuted;
 
-  video.play().catch(() => {
-    // Autoplay with sound blocked -> fallback to muted playback & sync UI state!
-    setMuteState(true);
-    video.play().catch((err) => console.error('Video playback failed:', err));
-  });
+  const playPromise = video.play();
+  if (playPromise !== undefined) {
+    playPromise.catch(() => {
+      // Autoplay with sound blocked -> fallback to muted playback & sync UI state!
+      setMuteState(true);
+      video.play().catch((err) => console.error('Video playback failed:', err));
+    });
+  }
   mode = 'PLAYING';
 }
 
@@ -311,6 +324,11 @@ function update(now) {
     if (best) startPlayback(best);
 
   } else if (mode === 'PLAYING') {
+    if (active) {
+      const tex = videoTextures[active.meta.video];
+      if (tex) tex.needsUpdate = true;
+    }
+
     if (videoEnded) {
       stopPlayback();
     } else if (!active.state.visible && now - active.state.lostAt > CONFIG.LOST_GRACE_MS) {
@@ -371,6 +389,35 @@ if (hudBtn) {
   });
 }
 
+// Return to Menu / Stop Camera Handler
+const stopBtn = document.getElementById('btn-stop');
+if (stopBtn) {
+  stopBtn.addEventListener('click', stopCamera);
+}
+
+async function stopCamera() {
+  stopPlayback();
+  mode = 'IDLE';
+
+  try {
+    renderer.setAnimationLoop(null);
+    await mindarThree.stop();
+  } catch (err) {
+    console.warn('MindAR stop warning:', err);
+  }
+
+  // Release raw video tracks to completely turn off camera hardware light
+  if (mindarThree.video) {
+    const stream = mindarThree.video.srcObject;
+    if (stream && stream.getTracks) {
+      stream.getTracks().forEach((track) => track.stop());
+    }
+    mindarThree.video.srcObject = null;
+  }
+
+  document.getElementById('overlay')?.classList.remove('hidden');
+}
+
 // iOS Installation Banner Detection
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 const isStandalone = window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
@@ -403,8 +450,9 @@ async function start() {
   const errorEl = document.getElementById('error');
   if (errorEl) errorEl.textContent = '';
 
-  // iOS Safari User Gesture Unlock: Unlock all video elements
-  for (const v of Object.values(videos)) {
+  // Pre-warm and unlock all 4 video elements for iOS Safari
+  for (const [id, v] of Object.entries(videos)) {
+    warmVideo(id);
     v.muted = isMuted;
     const p = v.play();
     v.pause();
