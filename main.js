@@ -68,7 +68,7 @@ function setMuteState(muted) {
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v2');
+    const cache = await caches.open('all-seeing-eye-v3');
     for (const file of CRITICAL_OFFLINE_FILES) {
       const match = await cache.match(file, { ignoreSearch: true });
       if (!match || !match.ok) {
@@ -103,9 +103,11 @@ async function updateCacheStatusUI(forcedMessage = null, isReady = false) {
 
 // Register SW & Listen for Caching Events
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./sw.js', { scope: './' })
+  navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
     .then((reg) => {
       console.log('[App] SW registered with scope:', reg.scope);
+      // Force check for SW updates on every page load
+      reg.update().catch(() => {});
       updateCacheStatusUI();
     })
     .catch((err) => {
