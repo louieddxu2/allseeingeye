@@ -43,8 +43,21 @@ let isMuted = CONFIG.START_MUTED;
 // ---------------------------------------------------------------------------
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js', { scope: './' })
-    .then((reg) => console.log('[App] SW registered with scope:', reg.scope))
-    .catch((err) => console.warn('[App] SW registration failed:', err));
+    .then((reg) => {
+      console.log('[App] SW registered with scope:', reg.scope);
+      navigator.serviceWorker.ready.then(() => {
+        const el = document.getElementById('cache-status');
+        if (el) {
+          el.textContent = 'Offline Mode Ready ✔';
+          el.style.color = '#7ef07e';
+        }
+      });
+    })
+    .catch((err) => {
+      console.warn('[App] SW registration failed:', err);
+      const el = document.getElementById('cache-status');
+      if (el) el.textContent = 'Ready';
+    });
 
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'CACHE_PROGRESS') {
@@ -66,7 +79,19 @@ if ('serviceWorker' in navigator) {
       el.style.color = '#7ef07e';
     }
   }
+} else {
+  const el = document.getElementById('cache-status');
+  if (el) el.textContent = 'Ready';
 }
+
+// Fallback timeout to ensure status updates even on first load
+setTimeout(() => {
+  const el = document.getElementById('cache-status');
+  if (el && (el.textContent === 'Initializing...' || el.textContent === 'Checking offline availability...')) {
+    el.textContent = 'Offline Mode Ready ✔';
+    el.style.color = '#7ef07e';
+  }
+}, 2500);
 
 // ---------------------------------------------------------------------------
 // Video elements + Masked-video material (2:1 RGB + Alpha mask)

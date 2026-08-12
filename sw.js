@@ -34,8 +34,8 @@ self.addEventListener('install', (event) => {
         try {
           await cache.add(url);
           cachedCount++;
-          // Broadcast caching progress to clients
-          const clientsList = await self.clients.matchAll();
+          // Broadcast caching progress to all clients (including uncontrolled)
+          const clientsList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
           clientsList.forEach((client) => {
             client.postMessage({
               type: 'CACHE_PROGRESS',
@@ -81,12 +81,11 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(req, { ignoreSearch: true }).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch background update for cache freshness
         fetch(req).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => cache.put(req, networkResponse));
           }
-        }).catch(() => {/* Offline fallback, swallow network error */});
+        }).catch(() => {/* Offline fallback */});
         return cachedResponse;
       }
       return fetch(req).then((networkResponse) => {
@@ -104,7 +103,6 @@ self.addEventListener('fetch', (event) => {
 // Specialized Range Request Handler for iOS Safari Video compatibility
 async function handleRangeRequest(request) {
   const cache = await caches.open(CACHE_NAME);
-  // Match without query string or range headers
   let response = await cache.match(request, { ignoreSearch: true });
 
   if (!response) {

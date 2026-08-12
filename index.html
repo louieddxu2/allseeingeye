@@ -67,10 +67,20 @@
     margin: 0;
   }
   #logo { top: 2%; width: 70%; height: auto; filter: drop-shadow(0 1cqw 2cqw rgba(0,0,0,.6)); }
-  #title { top: 43%; width: 80%; height: auto; filter: drop-shadow(0 1cqw 2cqw rgba(0,0,0,.6)); }
+  #title { top: 38%; width: 76%; height: auto; filter: drop-shadow(0 1cqw 2cqw rgba(0,0,0,.6)); }
   
+  #cache-status {
+    top: 59%;
+    width: 84%;
+    font-size: 3.2cqw;
+    color: var(--accent-gold);
+    text-shadow: 0 .2cqw .5cqw rgba(0,0,0,0.9);
+    letter-spacing: 0.5px;
+    z-index: 12;
+  }
+
   #intro {
-    top: 67%;
+    top: 66%;
     width: 82%;
     font-size: 4cqw;
     line-height: 1.45;
@@ -104,15 +114,6 @@
   }
   #start:active { transform: scale(.96); }
   #start:active img { filter: brightness(1.15); }
-
-  #cache-status {
-    top: 62%;
-    width: 80%;
-    font-size: 3.2cqw;
-    color: var(--accent-gold);
-    text-shadow: 0 .2cqw .5cqw rgba(0,0,0,0.9);
-    letter-spacing: 0.5px;
-  }
 
   #error {
     bottom: 1.5%;
@@ -251,7 +252,7 @@
   <img id="logo" src="assets/t7clogo.png" alt="The 7th Continent" width="851" height="643">
   <img id="title" src="assets/allseeingeye.png" alt="The All-Seeing Eye" width="860" height="507">
   
-  <div id="cache-status">Checking offline availability...</div>
+  <div id="cache-status">Initializing...</div>
 
   <p id="intro">
     Use your camera to scan the <strong>Terrain cards</strong> in play, until the <strong>All-Seeing Eye</strong> reveals hidden secrets!
