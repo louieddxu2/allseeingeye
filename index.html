@@ -129,8 +129,11 @@
     top: max(12px, env(safe-area-inset-top));
     right: max(12px, env(safe-area-inset-right));
     z-index: 20;
-    display: flex;
+    display: none;
     gap: 8px;
+  }
+  #control-bar.active {
+    display: flex;
   }
   .ctrl-btn {
     width: 40px;

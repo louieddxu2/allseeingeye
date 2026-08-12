@@ -68,7 +68,7 @@ function setMuteState(muted) {
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v1');
+    const cache = await caches.open('all-seeing-eye-v2');
     for (const file of CRITICAL_OFFLINE_FILES) {
       const match = await cache.match(file, { ignoreSearch: true });
       if (!match || !match.ok) {
@@ -432,6 +432,12 @@ async function stopCamera() {
     mindarThree.video.srcObject = null;
   }
 
+  // Hide AR-mode UI elements
+  document.getElementById('control-bar')?.classList.remove('active');
+  hud.style.visibility = 'hidden';
+  hudVisible = false;
+  if (hudBtn) hudBtn.style.background = 'rgba(27, 30, 34, 0.75)';
+
   document.getElementById('overlay')?.classList.remove('hidden');
 }
 
@@ -487,6 +493,9 @@ async function start() {
   }
 
   document.getElementById('overlay')?.classList.add('hidden');
+
+  // Show AR-mode UI controls
+  document.getElementById('control-bar')?.classList.add('active');
 
   renderer.setAnimationLoop(() => {
     scene.updateMatrixWorld(true);
