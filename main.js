@@ -68,7 +68,7 @@ function setMuteState(muted) {
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v6');
+    const cache = await caches.open('all-seeing-eye-v7');
     const flag = await cache.match('./offline-ready-flag');
     if (flag) {
       return true;
@@ -76,7 +76,6 @@ async function verifyOfflineAssetsCached() {
     const keys = await cache.keys();
     if (keys.length === 0) return false;
 
-    // Secondary check: verify critical files exist in cache keys
     let foundCount = 0;
     for (const file of CRITICAL_OFFLINE_FILES) {
       const match = await cache.match(file, { ignoreSearch: true });
@@ -457,7 +456,7 @@ if (hudBtn) {
 // Return to Menu / Stop Camera Handler
 const stopBtn = document.getElementById('btn-stop');
 if (stopBtn) {
-  stopBtn.addEventListener('click', stopCamera);
+  stopBtn.addEventListener('click', () => stopCamera(false));
 }
 
 // Force Reset Scan Handler
@@ -466,7 +465,17 @@ if (resetBtn) {
   resetBtn.addEventListener('click', forceResetScan);
 }
 
-async function stopCamera() {
+// Mobile Hardware/Gesture Back Button Interception
+window.addEventListener('popstate', () => {
+  const overlay = document.getElementById('overlay');
+  const isCameraActive = overlay && overlay.classList.contains('hidden');
+  if (isCameraActive) {
+    // Intercept back gesture: Return to menu instead of closing/navigating away
+    stopCamera(true);
+  }
+});
+
+async function stopCamera(fromPopState = false) {
   stopPlayback();
   mode = 'IDLE';
 
@@ -500,6 +509,11 @@ async function stopCamera() {
   if (hudBtn) hudBtn.style.background = 'rgba(27, 30, 34, 0.75)';
 
   document.getElementById('overlay')?.classList.remove('hidden');
+
+  // If stopped via UI button (not popstate), pop the history entry
+  if (!fromPopState && history.state && history.state.page === 'camera') {
+    history.back();
+  }
 }
 
 // iOS Installation Banner Detection
@@ -545,6 +559,11 @@ async function start() {
     if (errorEl) errorEl.textContent = 'Could not start camera: ' + (err.message || err);
     showCameraError(err);
     return;
+  }
+
+  // Push history state to intercept mobile back gesture
+  if (!history.state || history.state.page !== 'camera') {
+    history.pushState({ page: 'camera' }, '', '#camera');
   }
 
   document.getElementById('overlay')?.classList.add('hidden');

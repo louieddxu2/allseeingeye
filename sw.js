@@ -1,4 +1,4 @@
-const CACHE_NAME = 'all-seeing-eye-v6';
+const CACHE_NAME = 'all-seeing-eye-v7';
 
 const ASSETS_TO_CACHE = [
   './',
