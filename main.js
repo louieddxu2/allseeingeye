@@ -63,30 +63,37 @@ function setMuteState(muted) {
 }
 
 // ---------------------------------------------------------------------------
-// Strict & Reliable Offline Cache Verification
+// Strict & Reliable Offline Cache Verification across all Cache Stores
 // ---------------------------------------------------------------------------
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v8');
-    const flag = await cache.match('./offline-ready-flag');
-    if (flag) {
-      return true;
-    }
-    const keys = await cache.keys();
-    if (keys.length === 0) return false;
+    const cacheNames = await caches.keys();
+    if (cacheNames.length === 0) return false;
 
-    let foundCount = 0;
-    for (const file of CRITICAL_OFFLINE_FILES) {
-      const match = await cache.match(file, { ignoreSearch: true });
-      if (match && match.ok) {
-        foundCount++;
-      } else {
-        const foundInKeys = keys.some(req => req.url.includes(file));
-        if (foundInKeys) foundCount++;
+    for (const name of cacheNames) {
+      const cache = await caches.open(name);
+      const flag = await cache.match('./offline-ready-flag');
+      if (flag) return true;
+
+      const keys = await cache.keys();
+      if (keys.length > 0) {
+        let foundCount = 0;
+        for (const file of CRITICAL_OFFLINE_FILES) {
+          const match = await cache.match(file, { ignoreSearch: true });
+          if (match && match.ok) {
+            foundCount++;
+          } else {
+            const foundInKeys = keys.some(req => req.url.includes(file));
+            if (foundInKeys) foundCount++;
+          }
+        }
+        if (foundCount >= CRITICAL_OFFLINE_FILES.length - 1) {
+          return true;
+        }
       }
     }
-    return foundCount >= CRITICAL_OFFLINE_FILES.length - 1;
+    return false;
   } catch (err) {
     return false;
   }
@@ -112,6 +119,15 @@ async function updateCacheStatusUI(forcedMessage = null, isReady = false) {
   }
 }
 
+// Active polling to check offline readiness every 1.5 seconds until ready
+const cachePollInterval = setInterval(async () => {
+  const isReady = await verifyOfflineAssetsCached();
+  if (isReady) {
+    updateCacheStatusUI('Offline Mode Ready ✔', true);
+    clearInterval(cachePollInterval);
+  }
+}, 1500);
+
 // Register SW & Listen for Caching Events
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js', { scope: './', updateViaCache: 'none' })
@@ -133,6 +149,7 @@ if ('serviceWorker' in navigator) {
         if (event.data.progress >= 100) {
           el.textContent = 'Offline Mode Ready ✔';
           el.style.color = '#7ef07e';
+          clearInterval(cachePollInterval);
         } else {
           el.textContent = `Downloading offline assets: ${event.data.progress}%`;
           el.style.color = '#e2b763';
@@ -140,6 +157,7 @@ if ('serviceWorker' in navigator) {
       }
     } else if (event.data.type === 'CACHE_COMPLETE') {
       updateCacheStatusUI('Offline Mode Ready ✔', true);
+      clearInterval(cachePollInterval);
     }
   });
 
@@ -470,7 +488,6 @@ window.addEventListener('popstate', () => {
   const overlay = document.getElementById('overlay');
   const isCameraActive = overlay && overlay.classList.contains('hidden');
   if (isCameraActive) {
-    // Intercept back gesture: Return to menu instead of closing/navigating away
     stopCamera(true);
   }
 });
@@ -492,7 +509,6 @@ async function stopCamera(fromPopState = false) {
     console.warn('MindAR stop warning:', err);
   }
 
-  // Release raw video tracks to completely turn off camera hardware light
   if (mindarThree.video) {
     const stream = mindarThree.video.srcObject;
     if (stream && stream.getTracks) {
@@ -501,7 +517,6 @@ async function stopCamera(fromPopState = false) {
     mindarThree.video.srcObject = null;
   }
 
-  // Hide AR-mode UI elements
   document.getElementById('control-bar')?.classList.remove('active');
   document.getElementById('btn-reset-scan')?.classList.remove('active');
   hud.style.visibility = 'hidden';
@@ -510,7 +525,6 @@ async function stopCamera(fromPopState = false) {
 
   document.getElementById('overlay')?.classList.remove('hidden');
 
-  // If stopped via UI button (not popstate), pop the history entry
   if (!fromPopState && history.state && history.state.page === 'camera') {
     history.back();
   }
@@ -561,7 +575,6 @@ async function start() {
     return;
   }
 
-  // Push history state to intercept mobile back gesture
   if (!history.state || history.state.page !== 'camera') {
     history.pushState({ page: 'camera' }, '', '#camera');
   }
