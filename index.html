@@ -60,7 +60,7 @@
   #overlay.hidden { display: none; }
 
   /* Shared placement inside overlay */
-  #logo, #title, #intro, #start-container, #cache-status, #error {
+  #logo, #title, #intro, #start-container, #cache-status, #error, #disclaimer {
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
@@ -90,7 +90,7 @@
   }
 
   #start-container {
-    bottom: 4%;
+    bottom: 5.5%;
     width: 100%;
     display: flex;
     flex-direction: column;
@@ -114,6 +114,16 @@
   }
   #start:active { transform: scale(.96); }
   #start:active img { filter: brightness(1.15); }
+
+  #disclaimer {
+    bottom: 1.2%;
+    width: 88%;
+    font-size: 2.7cqw;
+    line-height: 1.35;
+    color: rgba(238, 238, 238, 0.65);
+    text-shadow: 0 .2cqw .5cqw rgba(0,0,0,0.95);
+    z-index: 12;
+  }
 
   #error {
     bottom: 1.5%;
@@ -295,6 +305,10 @@
     </button>
   </div>
   
+  <p id="disclaimer">
+    Unofficial fan-made application. Not affiliated with or endorsed by Serious Poulp.
+  </p>
+
   <p id="error"></p>
 </div>
 

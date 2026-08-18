@@ -68,7 +68,7 @@ function setMuteState(muted) {
 async function verifyOfflineAssetsCached() {
   if (!('caches' in window)) return false;
   try {
-    const cache = await caches.open('all-seeing-eye-v7');
+    const cache = await caches.open('all-seeing-eye-v8');
     const flag = await cache.match('./offline-ready-flag');
     if (flag) {
       return true;
